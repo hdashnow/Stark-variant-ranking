@@ -7,19 +7,21 @@ library("RColorBrewer")
 
 data_file = "~/Dropbox/Harriet's Documents/MCRI Bioinformatics/variant-ranking-MGHA/data/variantrankingsV3.txt"
 
-my.colours = brewer.pal(6,"Spectral")[c(1,2,3,5,6)] # a colour set that looks okay when printed greyscale
-
-pdf('variant-ranking-plots_v3.pdf', width = 10)
-
 csv.colnames = c("Study.ID","HPO.terms","Variant","No.of.variants.available","GPI",
-                 #"VPI.rank","Combined.highest.rank","Exomiser.rank","CADD.rank","Condel.rank",
                  "VPI","Combined","Exomiser","CADD","Condel",
                  "CADD.score","Condel.score", 
                  'GERP.rank','GERP.score','PhyloP.rank','PhyloP.score','X','Y','Z')
+                  # XYZ are just extra columns containing NAs.
 
 ranking.cols = c("GPI", "VPI", "Combined", "Exomiser","CADD","Condel") # Columns containing ranks
-plotting.cols =  c("Combined", "VPI", "Exomiser","CADD","Condel") # Columns to plut
+plotting.cols =  c("Combined", "VPI", "Exomiser","CADD","Condel") # Columns to plot
 table.cols = c("Combined","Exomiser","CADD","Condel") # Columns for table 1 in paper
+my.colours = brewer.pal(6,"Spectral")[c(1,2,3,5,6)] # a colour set that looks okay when printed greyscale
+
+# Swap order of Combined and VPI for the boxplot
+boxplot.order = c(2,1,3,4,5)
+boxplot.colours = my.colours[boxplot.order]
+boxplot.cols = plotting.cols[boxplot.order]
 
 raw.variantrankings = read.delim(data_file, 
                                  comment.char="#", stringsAsFactors=FALSE,
@@ -66,16 +68,9 @@ base_breaks <- function(n = 10){
   }
 }
 
-make.plots = function(data, title='') {
-  mean.ranks = apply(data[,ranking.cols],2,mean, na.rm = T)
-  barplot(mean.ranks, ylab="Mean rank", main=title)
-  
-  boxplot(data[,ranking.cols], log='y', ylab="Rank", main=title)
+## Box plot
 
-  # Swap order of Combined and VPI
-  boxplot.order = c(2,1,3,4,5)
-  boxplot.colours = my.colours[boxplot.order]
-  boxplot.cols = ranking.cols[boxplot.order]
+make.boxplot = function(data, title='') {
   
   pdf('paper/boxplot_v3.pdf', width = 10)
   melted.data = melt(data[,boxplot.cols])
@@ -89,20 +84,11 @@ make.plots = function(data, title='') {
   dev.off()
 }
 
-#pdf('plots.pdf', width=10)
-
 title = paste0('Ranks of causal variants, N = ', nrow(data))
-make.plots(data, title)
+make.boxplot(data, title)
 
-# Cumulative density plot
-melted.data = melt(data[,ranking.cols])
 
-df <- ddply(melted.data,.(variable),transform,len=length(value))
-p = ggplot(df,aes(x=value,color=variable)) + 
-  geom_step(aes(len=len,y=..y.. * len),stat="ecdf", size = 1.1) +
-  scale_x_continuous(trans='log10', breaks = base_breaks()) + 
-  labs(x='Rank of the causal variant(s)',y="Number of variants", color = 'Ranking method', title="Number of causal variants found with a given rank") 
-print(p)
+## Cumulative density plot
 
 # Calculate my own ecdf so I can control the plotting more finely
 my_ecdf = function(x) {
@@ -112,12 +98,9 @@ my_ecdf = function(x) {
   return(cbind(values, cum.count))
 }
 
-#test.data = data[,ranking.cols]#head(data[,ranking.cols])
-#test.melt = melt(test.data)
-df_ecdf = ddply(melt(data[,ranking.cols]), .(variable), function(x){
+df_ecdf = ddply(melt(data[,plotting.cols]), .(variable), function(x){
   my_ecdf(x$value)
                })
-
 
 pdf('paper/cumulative_v3.pdf', width = 10)
 p = ggplot(df_ecdf,aes(x=values, y=cum.count,colour=variable, linetype=variable)) + 
@@ -129,33 +112,13 @@ p = ggplot(df_ecdf,aes(x=values, y=cum.count,colour=variable, linetype=variable)
        title="Number of causal variants found with a given rank")  +
   theme_bw() +
   scale_colour_manual(values=my.colours)
-  #scale_colour_brewer(palette = "Spectral")
 print(p)
-dev.off()
-
-melted.data = melt(data[,c("Study.ID",ranking.cols)],
-                   id.vars = c("Study.ID"))
-melted.data$Study.ID = as.factor(melted.data$Study.ID)
-
-p = ggplot(melted.data,aes(x=variable, y=value, color=factor(Study.ID))) + 
-  geom_jitter(width = 0.2, height = 0.5) + 
-  scale_y_continuous(trans=reverselog_trans(10), breaks = base_breaks()) +
-  labs(y="Rank", x='')
-print(p)
-
-p = ggplot(melted.data,aes(x=variable, y=value, color=Study.ID)) + 
-  geom_line(aes(group=Study.ID)) + 
-  scale_y_continuous(trans=reverselog_trans(10), breaks = base_breaks()) +
-  labs(y="Rank", x='')
-print(p)
-
 dev.off()
 
 
 ## Permutation test
 
 ranks = data[,table.cols]
-#ranks = data[c("Combined.highest.rank","Exomiser.rank")]
 
 permute_data = function(df){
   permuted.df = t(apply(df, 1, {function(row) sample(row, length(row), replace = F)}))
