@@ -200,9 +200,10 @@ apply(data[,table.cols], 2, function(x){ sum(x<=5, na.rm = T) })
 # percent
 apply(data[,table.cols], 2, function(x){ sum(x<=5, na.rm = T)/length(x)*100 })
 
-# Of the 9 variants which were not ranked as a result of their inclusion in the gene list-derived GPI, 
+# Of the X variants which were not ranked as a result of their inclusion in the gene list-derived GPI, 
 # the average rank produced by the VPI was:
 VPIs.without.GPIs = data$VPI[is.na(data$GPI)]
+length(VPIs.without.GPIs)
 mean(VPIs.without.GPIs)
 
 # Condel/CADD scores
@@ -216,4 +217,9 @@ Combined.with.GPIs = data$Combined[!is.na(data$GPI)]
 mean(Combined.with.GPIs)
 # Number of patients with GPIs:
 length(unique(data$Study.ID[!is.na(data$GPI)]))
+
+# Total number of patients
+length(unique(data$Study.ID))
+# Number of patients with multiple variants deemed causative
+length(unique(data$Study.ID[duplicated(data$Study.ID)]))
 
